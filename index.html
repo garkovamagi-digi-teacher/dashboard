@@ -210,6 +210,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
         <option value="name">По име А-Я</option><option value="pts_desc">По макс. точки ↓</option>
         <option value="year_asc">По година ↑</option><option value="year_desc">По година ↓</option><option value="imp_desc">По подобрения ↓</option>
       </select>
+      <select id="sw-year-pts" onchange="renderSwimmers()"><option value="">Всички години</option></select>
     </div>
     <div id="sw-content"></div>
   </div>
@@ -550,6 +551,9 @@ function updateAllFilters(){
   const years=[...new Set(allAth.map(a=>a.year).filter(Boolean))].sort();
   const allAges=[...new Set(allAth.map(a=>getAge(a)).filter(a=>a<99))].sort((a,b)=>a-b);
   buildAgePicker('prog',allAges,renderProgress);buildAgePicker('sw',allAges,renderSwimmers);
+  const allResultYears=[...new Set(Object.values(athletes).flatMap(a=>a.results.map(r=>r.date&&r.date.slice(0,4))).filter(Boolean))].sort().reverse();
+  const swYrSel=document.getElementById('sw-year-pts');
+  if(swYrSel){const cur=swYrSel.value;swYrSel.innerHTML='<option value="">Всички години</option>'+allResultYears.map(y=>`<option value="${y}">${y}</option>`).join('');if(allResultYears.includes(cur))swYrSel.value=cur;}
   const events=[...new Set(allAth.flatMap(a=>a.results.map(r=>r.event)))].sort();
   const yr=document.getElementById('prog-year');if(yr){const c=yr.value;yr.innerHTML='<option value="">Всички годишници</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');yr.value=c;}
   const ev=document.getElementById('prog-event');if(ev){const c=ev.value;ev.innerHTML='<option value="">Всички дисциплини</option>'+events.map(e=>`<option value="${e}">${e}</option>`).join('');ev.value=c;}
@@ -654,6 +658,8 @@ function renderSwimmerDetail(a){
 
 function toggleShowHidden(){swShowHidden=!swShowHidden;document.getElementById('show-hidden-btn').textContent=swShowHidden?'Скрий скритите':'Покажи скритите';renderSwimmers();}
 function renderSwimmers(){
+  const swYfH=document.getElementById('sw-year-pts')?.value||'';
+  const ptsHeader=document.getElementById('sw-pts-header');if(ptsHeader)ptsHeader.textContent=swYfH?('Макс. т. '+swYfH):'Макс. т. WA';
   const q=(document.getElementById('sw-search')?.value||'').toLowerCase();const g=document.getElementById('sw-gender')?.value||'';const sortBy=document.getElementById('sw-sort')?.value||'name';const selAges=selectedAges['sw'];
   let list=Object.values(athletes).filter(a=>{
     if(!swShowHidden&&hiddenSwrids.has(a.swrid))return false;if(swShowHidden&&!hiddenSwrids.has(a.swrid))return false;
@@ -665,7 +671,7 @@ function renderSwimmers(){
   document.getElementById('sw-sub').textContent=swShowHidden?`${list.length} скрити плувци`:`${list.length} плувци${hiddenCount?` · ${hiddenCount} скрити`:''}`;
   const el=document.getElementById('sw-content');
   if(!list.length){el.innerHTML=`<div class="empty-state"><div class="empty-icon">🏊</div><div class="empty-title">${swShowHidden?'Няма скрити плувци':'Няма плувци'}</div></div>`;return;}
-  el.innerHTML=`<div style="background:var(--surf);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden"><table><thead><tr><th>Плувец</th><th>Пол</th><th>Г.р.</th><th>Дисц.</th><th>Рез.</th><th>Макс. т. WA</th><th>Подобр.</th><th></th></tr></thead><tbody>${list.map(a=>{const prog=getProgression(a);const evs=Object.entries(prog);const imp=evs.filter(([,e])=>e.improved).length;const bp=getMaxPts(a);const col=avColor(a.name);const isHid=hiddenSwrids.has(a.swrid);return`<tr class="clickable" onclick="go('progress');showSwimmerDetail('${a.swrid}')"><td><div style="display:flex;align-items:center;gap:9px"><div class="av" style="width:28px;height:28px;font-size:10px;background:${col}22;color:${col}">${initials(a.name)}</div><span style="font-weight:500">${a.name}</span></div></td><td>${a.gender==='M'?'М':'Ж'}</td><td>${a.year}</td><td>${evs.length}</td><td>${a.results.length}</td><td><span class="mono" style="color:var(--blue)">${bp||'—'}</span></td><td>${imp>0?`<span style="color:var(--green);font-weight:600">${imp} ▲</span>`:`<span style="color:var(--text3)">—</span>`}</td><td><button onclick="${isHid?`unhideSwimmer('${a.swrid}',event)`:`hideSwimmer('${a.swrid}',event)`}" style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border2);background:none;color:var(--text3);cursor:pointer">${isHid?'Върни':'Скрий'}</button></td></tr>`;}).join('')}</tbody></table></div>`;
+  el.innerHTML=`<div style="background:var(--surf);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden"><table><thead><tr><th>Плувец</th><th>Пол</th><th>Г.р.</th><th>Дисц.</th><th>Рез.</th><th id="sw-pts-header">Макс. т. WA</th><th>Подобр.</th><th></th></tr></thead><tbody>${list.map(a=>{const prog=getProgression(a);const evs=Object.entries(prog);const imp=evs.filter(([,e])=>e.improved).length;const swYf=document.getElementById('sw-year-pts')?.value||'';const bp=swYf?(a.results.filter(r=>r.date?.startsWith(swYf)&&r.points>0).length?Math.max(...a.results.filter(r=>r.date?.startsWith(swYf)).map(r=>r.points||0)):0):getMaxPts(a);const col=avColor(a.name);const isHid=hiddenSwrids.has(a.swrid);return`<tr class="clickable" onclick="go('progress');showSwimmerDetail('${a.swrid}')"><td><div style="display:flex;align-items:center;gap:9px"><div class="av" style="width:28px;height:28px;font-size:10px;background:${col}22;color:${col}">${initials(a.name)}</div><span style="font-weight:500">${a.name}</span></div></td><td>${a.gender==='M'?'М':'Ж'}</td><td>${a.year}</td><td>${evs.length}</td><td>${a.results.length}</td><td><span class="mono" style="color:var(--blue)">${bp||'—'}</span></td><td>${imp>0?`<span style="color:var(--green);font-weight:600">${imp} ▲</span>`:`<span style="color:var(--text3)">—</span>`}</td><td><button onclick="${isHid?`unhideSwimmer('${a.swrid}',event)`:`hideSwimmer('${a.swrid}',event)`}" style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border2);background:none;color:var(--text3);cursor:pointer">${isHid?'Върни':'Скрий'}</button></td></tr>`;}).join('')}</tbody></table></div>`;
 }
 
 function renderEvents(){
