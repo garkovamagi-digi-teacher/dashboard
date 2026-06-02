@@ -326,7 +326,7 @@ async function loadData(){
     (rr.data||[]).forEach(r=>{
       const a=athletes[r.swrid];if(!a)return;
       const meetCourse=(meets.find(m=>m.id===r.meet_id)||{}).course||'';
-    const res={event:r.event,time:r.time_str,timeMs:r.time_ms,points:r.points||0,date:r.date||'',meetId:r.meet_id,meetName:r.meet_name||'',meetCity:r.meet_city||'',course:meetCourse,manual:!!r.manual,dbId:r.id};
+    const res={event:r.event,time:r.time_str,timeMs:r.time_ms,points:r.points||0,date:r.date||'',meetId:r.meet_id,meetName:r.meet_name||'',meetCity:r.meet_city||'',course:meetCourse,is_final:r.is_final!==false,manual:!!r.manual,dbId:r.id};
       if(r.is_relay){res.relay=true;a.relayResults.push(res);}else a.results.push(res);
     });
     manualResultsCache=(rr.data||[]).filter(r=>r.manual);
@@ -342,7 +342,7 @@ async function saveToSupabase(meetInfo,parsedAthletes){
   if(athRows.length){const{error:ae}=await db.from('athletes').upsert(athRows,{onConflict:'swrid',ignoreDuplicates:false});if(ae)throw ae;}
   const resRows=[];
   Object.values(parsedAthletes).forEach(a=>{
-    a.results.filter(r=>r.meetId===meetInfo.id).forEach(r=>resRows.push({swrid:a.swrid,event:r.event,time_str:r.time,time_ms:Math.round(r.timeMs),points:r.points||0,date:r.date||'',meet_id:r.meetId,meet_name:r.meetName||'',meet_city:r.meetCity||'',is_relay:false}));
+    a.results.filter(r=>r.meetId===meetInfo.id).forEach(r=>resRows.push({swrid:a.swrid,event:r.event,time_str:r.time,time_ms:Math.round(r.timeMs),points:r.points||0,date:r.date||'',meet_id:r.meetId,meet_name:r.meetName||'',meet_city:r.meetCity||'',is_relay:false,is_final:r.is_final!==false}));
     (a.relayResults||[]).filter(r=>r.meetId===meetInfo.id).forEach(r=>resRows.push({swrid:a.swrid,event:r.event,time_str:r.time,time_ms:Math.round(r.timeMs),points:0,date:r.date||'',meet_id:r.meetId,meet_name:r.meetName||'',meet_city:r.meetCity||'',is_relay:true}));
   });
   if(resRows.length){const{error:re}=await db.from('results').upsert(resRows,{onConflict:'swrid,meet_id,event,time_ms,is_relay',ignoreDuplicates:true});if(re)throw re;}
@@ -461,7 +461,7 @@ async function parseLXF(file){
       const rc=parseInt(xAttr(ss,'relaycount')||'1');
       const stroke=SMAP[xAttr(ss,'stroke')]||xAttr(ss,'stroke')||'';
       const dist=xAttr(ss,'distance')||'';
-      evMap[eid]={label:`${dist}м ${stroke}`,relay:rc>1,dist:parseInt(dist),stroke,date:d||meetInfo.date};
+      const rnd=xAttr(ev,'round')||'TIM';evMap[eid]={label:`${dist}м ${stroke}`,relay:rc>1,dist:parseInt(dist),stroke,date:d||meetInfo.date,round:rnd,isFinal:rnd!=='PRE'};
     });
   });
   const knownSwrids=new Set(Object.keys(athletes));
@@ -487,7 +487,7 @@ async function parseLXF(file){
         const ev=evMap[xAttr(r,'eventid')];if(!ev||ev.relay)return;
         let t=xAttr(r,'swimtime');if(t.startsWith('00:00:'))t=t.slice(6);else if(t.startsWith('00:'))t=t.slice(3);
         const ms=parseTimeMs(t);if(!ms||ms<1000)return;
-        a.results.push({event:ev.label,time:t,timeMs:ms,points:parseInt(xAttr(r,'points')||'0'),date:ev.date||meetInfo.date,meetId,meetName:meetInfo.name,meetCity:meetInfo.city});added++;
+        a.results.push({event:ev.label,time:t,timeMs:ms,points:parseInt(xAttr(r,'points')||'0'),date:ev.date||meetInfo.date,meetId,meetName:meetInfo.name,meetCity:meetInfo.city,is_final:ev.isFinal!==false});added++;
       });
       xChildren(relEl,'RESULT').forEach(r=>{
         const ev=evMap[xAttr(r,'eventid')];if(!ev||!ev.relay)return;
@@ -771,7 +771,9 @@ function renderStats(){
     if(!groups.some(gr=>ag(age,gr.k)))return;
     const nr=a.results.filter(r=>nids.has(r.meetId)&&r.points>0&&(!yf||r.date?.startsWith(yf)));
     if(!nr.length)return;
-    const tot=nr.reduce((s,r)=>s+(r.points||0),0);
+    const age18plus=age>=18;
+    const nrFinal=age18plus?nr.filter(r=>r.is_final!==false):nr;
+    const tot=nrFinal.reduce((s,r)=>s+(r.points||0),0);
     const mx=Math.max(...nr.map(r=>r.points||0));
     ss[a.swrid]={athlete:a,age,tot,mx,cnt:nr.length};
   });
