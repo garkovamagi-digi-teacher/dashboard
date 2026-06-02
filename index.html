@@ -706,7 +706,8 @@ function renderSwimmers(){
     if(q&&!a.name.toLowerCase().includes(q))return false;if(g&&a.gender!==g)return false;if(selAges.size>0&&!selAges.has(getAge(a)))return false;return true;
   });
   if(!swShowHidden)list=Object.values(athletes).filter(a=>{if(hiddenSwrids.has(a.swrid))return false;if(q&&!a.name.toLowerCase().includes(q))return false;if(g&&a.gender!==g)return false;if(selAges.size>0&&!selAges.has(getAge(a)))return false;return true;});
-  list.sort((a,b)=>{const bpA=getMaxPts(a),bpB=getMaxPts(b);const iA=Object.values(getProgression(a)).filter(e=>e.improved).length;const iB=Object.values(getProgression(b)).filter(e=>e.improved).length;if(sortBy==='pts_desc')return bpB-bpA;if(sortBy==='pts_asc')return bpA-bpB;if(sortBy==='year_asc')return a.year-b.year;if(sortBy==='year_desc')return b.year-a.year;if(sortBy==='imp_desc')return iB-iA;return a.name.localeCompare(b.name);});
+  const _mpy=(a,y)=>y?(a.results.filter(r=>r.date?.startsWith(y)&&r.points>0).length?Math.max(...a.results.filter(r=>r.date?.startsWith(y)).map(r=>r.points||0)):0):getMaxPts(a);
+  list.sort((a,b)=>{const bpA=_mpy(a,swYfH),bpB=_mpy(b,swYfH);const iA=Object.values(getProgression(a)).filter(e=>e.improved).length;const iB=Object.values(getProgression(b)).filter(e=>e.improved).length;if(sortBy==='pts_desc')return bpB-bpA;if(sortBy==='pts_asc')return bpA-bpB;if(sortBy==='year_asc')return a.year-b.year;if(sortBy==='year_desc')return b.year-a.year;if(sortBy==='imp_desc')return iB-iA;return a.name.localeCompare(b.name);});
   const hiddenCount=[...hiddenSwrids].filter(id=>athletes[id]).length;
   document.getElementById('sw-sub').textContent=swShowHidden?`${list.length} скрити плувци`:`${list.length} плувци${hiddenCount?` · ${hiddenCount} скрити`:''}`;
   const el=document.getElementById('sw-content');
