@@ -170,6 +170,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
       <div class="toolbar" id="prog-toolbar" style="display:none">
         <input type="search" id="prog-search" placeholder="Търси плувец…" oninput="renderProgress()" style="width:160px">
         <select id="prog-gender" onchange="renderProgress()"><option value="">М + Ж</option><option value="M">Момчета</option><option value="F">Момичета</option></select>
+        <select id="prog-course" onchange="renderProgress()"><option value="">LCM + SCM</option><option value="LCM">50м (LCM)</option><option value="SCM">25м (SCM)</option></select>
         <div class="age-picker" id="age-picker-prog">
           <button class="age-picker-btn" id="age-picker-prog-btn" onclick="toggleAgePicker('prog',event)"><span id="age-picker-prog-label">Всички възрасти</span><span style="font-size:10px;opacity:.5">▾</span></button>
           <div class="age-picker-dropdown" id="age-picker-prog-dd"></div>
@@ -202,6 +203,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
     <div class="toolbar">
       <input type="search" id="sw-search" placeholder="Търси…" oninput="renderSwimmers()" style="width:180px">
       <select id="sw-gender" onchange="renderSwimmers()"><option value="">М + Ж</option><option value="M">Момчета</option><option value="F">Момичета</option></select>
+      <select id="sw-course" onchange="renderSwimmers()"><option value="">LCM + SCM</option><option value="LCM">50м (LCM)</option><option value="SCM">25м (SCM)</option></select>
       <div class="age-picker" id="age-picker-sw">
         <button class="age-picker-btn" id="age-picker-sw-btn" onclick="toggleAgePicker('sw',event)"><span id="age-picker-sw-label">Всички възрасти</span><span style="font-size:10px;opacity:.5">▾</span></button>
         <div class="age-picker-dropdown" id="age-picker-sw-dd"></div>
@@ -219,6 +221,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
     <div class="toolbar">
       <input type="search" id="ev-filter" placeholder="Филтрирай дисциплина…" oninput="renderEvents()" style="width:200px">
       <select id="ev-gender" onchange="renderEvents()"><option value="">М + Ж</option><option value="M">Момчета</option><option value="F">Момичета</option></select>
+      <select id="ev-course" onchange="renderEvents()"><option value="">LCM + SCM</option><option value="LCM">50м (LCM)</option><option value="SCM">25м (SCM)</option></select>
     </div>
     <div id="ev-content"></div>
   </div>
@@ -322,7 +325,8 @@ async function loadData(){
     (ar.data||[]).forEach(a=>{athletes[a.swrid]={...a,results:[],relayResults:[]};if(a.hidden)hiddenSwrids.add(a.swrid);});
     (rr.data||[]).forEach(r=>{
       const a=athletes[r.swrid];if(!a)return;
-      const res={event:r.event,time:r.time_str,timeMs:r.time_ms,points:r.points||0,date:r.date||'',meetId:r.meet_id,meetName:r.meet_name||'',meetCity:r.meet_city||'',manual:!!r.manual,dbId:r.id};
+      const meetCourse=(meets.find(m=>m.id===r.meet_id)||{}).course||'';
+    const res={event:r.event,time:r.time_str,timeMs:r.time_ms,points:r.points||0,date:r.date||'',meetId:r.meet_id,meetName:r.meet_name||'',meetCity:r.meet_city||'',course:meetCourse,manual:!!r.manual,dbId:r.id};
       if(r.is_relay){res.relay=true;a.relayResults.push(res);}else a.results.push(res);
     });
     manualResultsCache=(rr.data||[]).filter(r=>r.manual);
@@ -575,11 +579,11 @@ function clearAges(key){selectedAges[key].clear();document.querySelectorAll(`#ag
 function updateAgePickerLabel(key){const lbl=document.getElementById(`age-picker-${key}-label`);if(!lbl)return;const sel=selectedAges[key];if(!sel.size){lbl.textContent='Всички възрасти';return;}const s=[...sel].sort((a,b)=>a-b);lbl.textContent=s.length<=3?s.map(a=>a+' г.').join(', '):`${s.length} възрасти`;}
 document.addEventListener('click',()=>{document.querySelectorAll('.age-picker-dropdown').forEach(d=>d.classList.remove('open'));document.querySelectorAll('.age-picker-btn').forEach(b=>b.classList.remove('active'));});
 
-function getProgression(a,eventFilter){
+function getProgression(a,eventFilter,courseFilter){
   const evs=eventFilter?[eventFilter]:[...new Set(a.results.map(r=>r.event))];
   const evData={};
   evs.forEach(ev=>{
-    const rs=a.results.filter(r=>r.event===ev).sort((x,y)=>new Date(x.date)-new Date(y.date)||x.timeMs-y.timeMs);
+    const rs=a.results.filter(r=>r.event===ev&&(!courseFilter||r.course===courseFilter||(courseFilter==='LCM'&&!r.course))).sort((x,y)=>new Date(x.date)-new Date(y.date)||x.timeMs-y.timeMs);
     const byMeet={};rs.forEach(r=>{if(!byMeet[r.meetId]||r.timeMs<byMeet[r.meetId].timeMs)byMeet[r.meetId]=r;});
     const dd=Object.values(byMeet).sort((x,y)=>new Date(x.date)-new Date(y.date));if(!dd.length)return;
     const best=Math.min(...dd.map(r=>r.timeMs));const worst=Math.max(...dd.map(r=>r.timeMs));
@@ -596,10 +600,11 @@ function renderProgress(){
   const selAges=selectedAges['prog'];
   const y=document.getElementById('prog-year')?.value||'';
   const ev=document.getElementById('prog-event')?.value||'';
+  const courseF=document.getElementById('prog-course')?.value||'';
   const sortBy=document.getElementById('prog-sort')?.value||'improved';
   let list=allAth.filter(a=>{
     if(hiddenSwrids.has(a.swrid))return false;
-    const prog=getProgression(a,ev||null);if(!Object.keys(prog).length)return false;
+    const prog=getProgression(a,ev||null,courseF);if(!Object.keys(prog).length)return false;
     if(q&&!a.name.toLowerCase().includes(q))return false;
     if(g&&a.gender!==g)return false;if(y&&a.year!=y)return false;
     if(selAges.size>0&&!selAges.has(getAge(a)))return false;
@@ -610,7 +615,7 @@ function renderProgress(){
   list.sort((a,b)=>{
     if(sortBy==='pts_desc')return getMaxPts(b)-getMaxPts(a);if(sortBy==='pts_asc')return getMaxPts(a)-getMaxPts(b);
     if(sortBy==='name')return a.name.localeCompare(b.name);if(sortBy==='year_asc')return a.year-b.year;if(sortBy==='year_desc')return b.year-a.year;
-    const pa=Object.values(getProgression(a)).filter(e=>e.improved).length;const pb=Object.values(getProgression(b)).filter(e=>e.improved).length;return pb-pa||getMaxPts(b)-getMaxPts(a);
+    const pa=Object.values(getProgression(a,null,courseF)).filter(e=>e.improved).length;const pb=Object.values(getProgression(b,null,courseF)).filter(e=>e.improved).length;return pb-pa||getMaxPts(b)-getMaxPts(a);
   });
   const vis=allAth.filter(a=>!hiddenSwrids.has(a.swrid));
   const totalImp=vis.filter(a=>Object.values(getProgression(a)).some(e=>e.improved)).length;
@@ -659,6 +664,7 @@ function renderSwimmerDetail(a){
 function toggleShowHidden(){swShowHidden=!swShowHidden;document.getElementById('show-hidden-btn').textContent=swShowHidden?'Скрий скритите':'Покажи скритите';renderSwimmers();}
 function renderSwimmers(){
   const swYfH=document.getElementById('sw-year-pts')?.value||'';
+  const swCourseF=document.getElementById('sw-course')?.value||'';
   const ptsHeader=document.getElementById('sw-pts-header');if(ptsHeader)ptsHeader.textContent=swYfH?('Макс. т. '+swYfH):'Макс. т. WA';
   const q=(document.getElementById('sw-search')?.value||'').toLowerCase();const g=document.getElementById('sw-gender')?.value||'';const sortBy=document.getElementById('sw-sort')?.value||'name';const selAges=selectedAges['sw'];
   let list=Object.values(athletes).filter(a=>{
@@ -671,17 +677,19 @@ function renderSwimmers(){
   document.getElementById('sw-sub').textContent=swShowHidden?`${list.length} скрити плувци`:`${list.length} плувци${hiddenCount?` · ${hiddenCount} скрити`:''}`;
   const el=document.getElementById('sw-content');
   if(!list.length){el.innerHTML=`<div class="empty-state"><div class="empty-icon">🏊</div><div class="empty-title">${swShowHidden?'Няма скрити плувци':'Няма плувци'}</div></div>`;return;}
-  el.innerHTML=`<div style="background:var(--surf);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden"><table><thead><tr><th>Плувец</th><th>Пол</th><th>Г.р.</th><th>Дисц.</th><th>Рез.</th><th id="sw-pts-header">Макс. т. WA</th><th>Подобр.</th><th></th></tr></thead><tbody>${list.map(a=>{const prog=getProgression(a);const evs=Object.entries(prog);const imp=evs.filter(([,e])=>e.improved).length;const swYf=document.getElementById('sw-year-pts')?.value||'';const bp=swYf?(a.results.filter(r=>r.date?.startsWith(swYf)&&r.points>0).length?Math.max(...a.results.filter(r=>r.date?.startsWith(swYf)).map(r=>r.points||0)):0):getMaxPts(a);const col=avColor(a.name);const isHid=hiddenSwrids.has(a.swrid);return`<tr class="clickable" onclick="go('progress');showSwimmerDetail('${a.swrid}')"><td><div style="display:flex;align-items:center;gap:9px"><div class="av" style="width:28px;height:28px;font-size:10px;background:${col}22;color:${col}">${initials(a.name)}</div><span style="font-weight:500">${a.name}</span></div></td><td>${a.gender==='M'?'М':'Ж'}</td><td>${a.year}</td><td>${evs.length}</td><td>${a.results.length}</td><td><span class="mono" style="color:var(--blue)">${bp||'—'}</span></td><td>${imp>0?`<span style="color:var(--green);font-weight:600">${imp} ▲</span>`:`<span style="color:var(--text3)">—</span>`}</td><td><button onclick="${isHid?`unhideSwimmer('${a.swrid}',event)`:`hideSwimmer('${a.swrid}',event)`}" style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border2);background:none;color:var(--text3);cursor:pointer">${isHid?'Върни':'Скрий'}</button></td></tr>`;}).join('')}</tbody></table></div>`;
+  el.innerHTML=`<div style="background:var(--surf);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden"><table><thead><tr><th>Плувец</th><th>Пол</th><th>Г.р.</th><th>Дисц.</th><th>Рез.</th><th id="sw-pts-header">Макс. т. WA</th><th>Подобр.</th><th></th></tr></thead><tbody>${list.map(a=>{const prog=getProgression(a);const evs=Object.entries(prog);const imp=evs.filter(([,e])=>e.improved).length;const swYf=document.getElementById('sw-year-pts')?.value||'';const bp=swYf?(a.results.filter(r=>r.date?.startsWith(swYf)&&r.points>0&&(!swCourseF||r.course===swCourseF)).length?Math.max(...a.results.filter(r=>r.date?.startsWith(swYf)&&(!swCourseF||r.course===swCourseF)).map(r=>r.points||0)):0):(swCourseF?Math.max(0,...a.results.filter(r=>r.course===swCourseF).map(r=>r.points||0)):getMaxPts(a));const col=avColor(a.name);const isHid=hiddenSwrids.has(a.swrid);return`<tr class="clickable" onclick="go('progress');showSwimmerDetail('${a.swrid}')"><td><div style="display:flex;align-items:center;gap:9px"><div class="av" style="width:28px;height:28px;font-size:10px;background:${col}22;color:${col}">${initials(a.name)}</div><span style="font-weight:500">${a.name}</span></div></td><td>${a.gender==='M'?'М':'Ж'}</td><td>${a.year}</td><td>${evs.length}</td><td>${a.results.length}</td><td><span class="mono" style="color:var(--blue)">${bp||'—'}</span></td><td>${imp>0?`<span style="color:var(--green);font-weight:600">${imp} ▲</span>`:`<span style="color:var(--text3)">—</span>`}</td><td><button onclick="${isHid?`unhideSwimmer('${a.swrid}',event)`:`hideSwimmer('${a.swrid}',event)`}" style="font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--border2);background:none;color:var(--text3);cursor:pointer">${isHid?'Върни':'Скрий'}</button></td></tr>`;}).join('')}</tbody></table></div>`;
 }
 
 function renderEvents(){
   const q=(document.getElementById('ev-filter')?.value||'').toLowerCase();const g=document.getElementById('ev-gender')?.value||'';
+  const evCourseF=document.getElementById('ev-course')?.value||'';
   const allAth=Object.values(athletes).filter(a=>!hiddenSwrids.has(a.swrid));
+  if(evCourseF){allAth.forEach(a=>{a._filteredResults=a.results.filter(r=>r.course===evCourseF);});} else {allAth.forEach(a=>{a._filteredResults=a.results;});}
   const evNames=[...new Set(allAth.flatMap(a=>a.results.map(r=>r.event)))].filter(e=>!q||e.toLowerCase().includes(q)).sort();
   const el=document.getElementById('ev-content');
   if(!evNames.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">🏊</div><div class="empty-title">Няма данни</div></div>';return;}
   el.innerHTML=evNames.map(ev=>{
-    const rows=allAth.flatMap(a=>{const prog=getProgression(a,ev);if(!prog[ev])return[];const best=prog[ev].results.reduce((b,r)=>r.timeMs<b.timeMs?r:b);return[{athlete:a,best,prog:prog[ev]}];}).filter(x=>!g||x.athlete.gender===g).sort((a,b)=>a.best.timeMs-b.best.timeMs);
+    const rows=allAth.flatMap(a=>{const tmpRes=a.results;if(evCourseF){a.results=a._filteredResults||a.results;}const prog=getProgression(a,ev);a.results=tmpRes;if(!prog[ev])return[];const best=prog[ev].results.reduce((b,r)=>r.timeMs<b.timeMs?r:b);return[{athlete:a,best,prog:prog[ev]}];}).filter(x=>!g||x.athlete.gender===g).sort((a,b)=>a.best.timeMs-b.best.timeMs);
     if(!rows.length)return'';
     return`<div class="event-block"><div class="event-block-head" onclick="this.parentElement.classList.toggle('open')"><div class="event-block-title">${ev} <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:6px">${rows.length} плувци</span></div><span style="font-size:12px;color:var(--text3)">▾</span></div><div class="event-block-body"><table><thead><tr><th>#</th><th>Плувец</th><th>Най-добро</th><th>Прогресия</th><th>Точки WA</th></tr></thead><tbody>${rows.slice(0,20).map((r,i)=>{const col=avColor(r.athlete.name);return`<tr class="clickable" onclick="go('progress');showSwimmerDetail('${r.athlete.swrid}')"><td style="font-weight:700;color:var(--text3)">${i+1}</td><td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:24px;height:24px;font-size:9px;background:${col}22;color:${col}">${initials(r.athlete.name)}</div><div><div style="font-weight:500">${r.athlete.name}</div><div style="font-size:10px;color:var(--text3)">${r.athlete.year}</div></div></div></td><td class="mono">${r.best.time}</td><td>${r.prog.count>=2?(r.prog.improved?'<span style="color:var(--green);font-weight:600">▲ подобрение</span>':'<span style="color:var(--red);font-weight:600">▼ влошаване</span>'):'<span style="color:var(--text3)">1 старт</span>'}</td><td style="color:var(--blue);font-weight:600">${r.best.points||'—'}</td></tr>`;}).join('')}</tbody></table></div></div>`;
   }).join('');
