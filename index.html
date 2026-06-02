@@ -638,15 +638,14 @@ function showSwimmerDetail(swrid){const a=athletes[swrid];if(!a)return;document.
 function showProgressList(){document.getElementById('progress-list').style.display='block';document.getElementById('progress-detail').style.display='none';killCharts();}
 function killCharts(){Object.values(charts).forEach(c=>c.destroy());charts={};}
 
-function renderSwimmerDetail(a){
-  const col=avColor(a.name);const prog=getProgression(a);
+function renderEvSections(a,wrap,resultsArr,chartPrefix){
+  const tmpResults=a.results;
+  a.results=resultsArr;
+  const prog=getProgression(a);
+  a.results=tmpResults;
   const evList=Object.entries(prog).sort((x,y)=>y[1].count!==x[1].count?y[1].count-x[1].count:x[0].localeCompare(y[0]));
-  const impCount=evList.filter(([,e])=>e.improved).length;
-  const srLink=`https://www.swimrankings.net/index.php?page=athleteDetail&athleteId=${a.swrid}`;
-  document.getElementById('swimmer-detail-content').innerHTML=`<div class="detail-header"><div class="av" style="width:56px;height:56px;font-size:18px;background:${col}22;color:${col}">${initials(a.name)}</div><div style="flex:1"><div class="detail-name">${a.name}</div><div class="detail-meta">${a.club||'НСК Олимп'} · ${a.birthdate||a.year} · ${getAge(a)} год.</div><div class="tags"><span class="tag tag-blue">${a.gender==='M'?'Момче':'Момиче'}</span><span class="tag tag-green">${impCount} подобрения</span><span class="tag tag-gray">${evList.length} дисциплини</span><span class="tag tag-gray">${a.results.length} старта</span>${a.swrid&&!a.swrid.startsWith('manual_')?`<a href="${srLink}" target="_blank" style="text-decoration:none"><span class="tag tag-gray">SwimRankings ↗</span></a>`:''}</div></div></div>${meets.length>=2?`<div class="notice"><b>Сравнение между ${meets.length} файла.</b> Зелено = подобрение, Червено = влошаване.</div>`:'<div class="notice">Качи повече LXF файлове за да видиш прогресия.</div>'}<div class="ev-sections" id="ev-sections-wrap"></div>${a.relayResults&&a.relayResults.length?'<div style="margin-top:20px"><div style="font-size:13px;font-weight:600;margin-bottom:10px">Щафета — Пост 1</div><div id="relay-sections-wrap" class="ev-sections"></div></div>':''}`;
-  const wrap=document.getElementById('ev-sections-wrap');
   evList.forEach(([evName,evData],idx)=>{
-    const chartId=`chart_${a.swrid}_${idx}`;const hasMulti=evData.results.length>=2;
+    const chartId=`${chartPrefix}_${a.swrid}_${idx}`;const hasMulti=evData.results.length>=2;
     const badgeCls=evData.count===1?'one':evData.improved?'imp':'reg';
     const badgeText=evData.count===1?'1 старт':(evData.last<evData.first)?`▲ -${evData.delta.toFixed(2)}с`:`▼ +${evData.delta.toFixed(2)}с`;
     const resRows=evData.results.map((r,i)=>{const prev=i>0?evData.results[i-1].timeMs:null;const delta=prev?(prev-r.timeMs)/1000:null;const dStr=delta!==null?(delta>0?`▲ ${delta.toFixed(2)}с`:delta<0?`▼ ${Math.abs(delta).toFixed(2)}с`:'='):'—';const dCls=delta===null?'':delta>0?'pos':'neg';return`<div class="res-row"><div><div class="res-time">${r.time}</div><div class="res-meet">${r.meetName}</div></div><div style="text-align:right"><div class="res-delta ${dCls}">${dStr}</div><div class="res-pts">${r.points} т. WA · ${r.date}</div></div></div>`;}).join('');
@@ -656,11 +655,46 @@ function renderSwimmerDetail(a){
     if(hasMulti){
       const labels=evData.results.map(r=>{const m=meets.find(m=>m.id===r.meetId);return m?m.city||m.name.slice(0,12):r.date;});
       const data=evData.results.map(r=>r.timeMs/1000);const bc=evData.improved?'#34d399':'#f87171';
-      charts[chartId]=new Chart(document.getElementById(chartId),{type:'line',data:{labels,datasets:[{label:evName,data,borderColor:bc,backgroundColor:bc+'18',pointBackgroundColor:evData.results.map(r=>meets.find(m=>m.id===r.meetId)?.color||bc),pointRadius:6,pointHoverRadius:8,tension:0.35,fill:true,borderWidth:2.5,segment:{borderColor:ctx=>data[ctx.p0DataIndex+1]<data[ctx.p0DataIndex]?'#34d399':'#f87171'}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{const v=ctx.raw;const m=Math.floor(v/60);const s=(v%60).toFixed(2).padStart(5,'0');return m>0?m+':'+s:v.toFixed(2)+'с';}}}},scales:{y:{reverse:true,ticks:{callback:v=>{const m=Math.floor(v/60);const s=(v%60).toFixed(2).padStart(5,'0');return m>0?m+':'+s:v.toFixed(2);},color:'#55607a',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},x:{ticks:{color:'#55607a',font:{size:10}},grid:{display:false}}}}});
+      charts[chartId]=new Chart(document.getElementById(chartId),{type:'line',data:{labels,datasets:[{label:evName,data,borderColor:bc,backgroundColor:bc+'18',pointBackgroundColor:evData.results.map(r=>meets.find(m=>m.id===r.meetId)?.color||bc),pointRadius:6,pointHoverRadius:8,tension:0.35,fill:true,borderWidth:2.5,segment:{borderColor:ctx=>data[ctx.p0DataIndex+1]<data[ctx.p0DataIndex]?'#34d399':'#f87171'}}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{const v=ctx.raw;const m=Math.floor(v/60);const s=(v%60).toFixed(2).padStart(5,'0');return m>0?m+':'+s:v.toFixed(2)+'с';}}}}},scales:{y:{reverse:true,ticks:{callback:v=>{const m=Math.floor(v/60);const s=(v%60).toFixed(2).padStart(5,'0');return m>0?m+':'+s:v.toFixed(2);},color:'#55607a',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},x:{ticks:{color:'#55607a',font:{size:10}},grid:{display:false}}}}});
     }
   });
+  return evList.length;
 }
 
+function renderSwimmerDetail(a){
+  const col=avColor(a.name);
+  const lcmResults=a.results.filter(r=>r.course==='LCM'||!r.course);
+  const scmResults=a.results.filter(r=>r.course==='SCM');
+  const hasLCM=lcmResults.length>0;
+  const hasSCM=scmResults.length>0;
+  const tmpR=a.results;
+  a.results=lcmResults;const progLCM=getProgression(a);a.results=tmpR;
+  const impCount=Object.values(progLCM).filter(e=>e.improved).length;
+  const srLink=`https://www.swimrankings.net/index.php?page=athleteDetail&athleteId=${a.swrid}`;
+  const poolBadges=(hasLCM?'<span class="tag tag-blue">50м LCM</span>':'')+
+    (hasSCM?'<span class="tag" style="background:var(--amber-l);color:var(--amber)">25м SCM</span>':'');
+  document.getElementById('swimmer-detail-content').innerHTML=
+    `<div class="detail-header"><div class="av" style="width:56px;height:56px;font-size:18px;background:${col}22;color:${col}">${initials(a.name)}</div><div style="flex:1"><div class="detail-name">${a.name}</div><div class="detail-meta">${a.club||'НСК Олимп'} · ${a.birthdate||a.year} · ${getAge(a)} год.</div><div class="tags"><span class="tag tag-blue">${a.gender==='M'?'Момче':'Момиче'}</span><span class="tag tag-green">${impCount} подобрения</span><span class="tag tag-gray">${a.results.length} старта</span>${poolBadges}${a.swrid&&!a.swrid.startsWith('manual_')?`<a href="${srLink}" target="_blank" style="text-decoration:none"><span class="tag tag-gray">SwimRankings ↗</span></a>`:''}</div></div></div><div id="detail-body"></div>${a.relayResults&&a.relayResults.length?'<div style="margin-top:20px"><div style="font-size:13px;font-weight:600;margin-bottom:10px">Щафета — Пост 1</div><div id="relay-sections-wrap" class="ev-sections"></div></div>':''}`;
+  const body=document.getElementById('detail-body');
+  if(hasLCM){
+    const sec=document.createElement('div');
+    sec.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--blue);margin:16px 0 8px;padding:8px 12px;background:var(--blue-l);border-radius:var(--r)">🏊 50м басейн (LCM)</div><div class="ev-sections" id="ev-lcm-wrap"></div>';
+    body.appendChild(sec);
+    renderEvSections(a,document.getElementById('ev-lcm-wrap'),lcmResults,'lc');
+  }
+  if(hasSCM){
+    const sec=document.createElement('div');
+    sec.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--amber);margin:16px 0 8px;padding:8px 12px;background:var(--amber-l);border-radius:var(--r)">🏊 25м басейн (SCM)</div><div class="ev-sections" id="ev-scm-wrap"></div>';
+    body.appendChild(sec);
+    renderEvSections(a,document.getElementById('ev-scm-wrap'),scmResults,'sc');
+  }
+  if(!hasLCM&&!hasSCM){
+    const sec=document.createElement('div');
+    sec.innerHTML='<div class="ev-sections" id="ev-all-wrap"></div>';
+    body.appendChild(sec);
+    renderEvSections(a,document.getElementById('ev-all-wrap'),a.results,'ch');
+  }
+}
 function toggleShowHidden(){swShowHidden=!swShowHidden;document.getElementById('show-hidden-btn').textContent=swShowHidden?'Скрий скритите':'Покажи скритите';renderSwimmers();}
 function renderSwimmers(){
   const swYfH=document.getElementById('sw-year-pts')?.value||'';
