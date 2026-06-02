@@ -800,9 +800,14 @@ async function deleteResult(dbId,swrid){
     });
     updateSidebarStats();
     killCharts();
-    if(swrid&&athletes[swrid])renderSwimmerDetail(athletes[swrid]);
-    else renderProgress();
     showToast('✓ Изтрит');
+    // Reload from DB and re-show swimmer
+    await loadData();
+    if(swrid&&athletes[swrid]){
+      document.getElementById('progress-list').style.display='none';
+      document.getElementById('progress-detail').style.display='block';
+      renderSwimmerDetail(athletes[swrid]);
+    }
   }catch(e){
     showToast('⚠ '+e.message,true);
     console.error('deleteResult error:',e);
