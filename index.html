@@ -788,19 +788,25 @@ function renderStats(){
 
 
 async function deleteResult(dbId,swrid){
-  if(!confirm('Изтрий този резултат?'))return;
   const numId=Number(dbId);
-  const{error}=await db.from('results').delete().eq('id',numId);
-  if(error){showToast('⚠ '+error.message,true);return;}
-  Object.values(athletes).forEach(a=>{
-    a.results=a.results.filter(r=>Number(r.dbId)!==numId);
-    if(a.relayResults)a.relayResults=a.relayResults.filter(r=>Number(r.dbId)!==numId);
-  });
-  updateSidebarStats();
-  killCharts();
-  if(swrid&&athletes[swrid])renderSwimmerDetail(athletes[swrid]);
-  else renderProgress();
-  showToast('✓ Резултатът е изтрит');
+  if(!numId){showToast('⚠ Невалиден ID',true);return;}
+  showToast('⏳ Изтрива се...');
+  try{
+    const res=await db.from('results').delete().eq('id',numId);
+    if(res.error)throw res.error;
+    Object.values(athletes).forEach(a=>{
+      a.results=a.results.filter(r=>Number(r.dbId)!==numId);
+      if(a.relayResults)a.relayResults=a.relayResults.filter(r=>Number(r.dbId)!==numId);
+    });
+    updateSidebarStats();
+    killCharts();
+    if(swrid&&athletes[swrid])renderSwimmerDetail(athletes[swrid]);
+    else renderProgress();
+    showToast('✓ Изтрит');
+  }catch(e){
+    showToast('⚠ '+e.message,true);
+    console.error('deleteResult error:',e);
+  }
 }
 
 function go(name){killCharts();document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));document.getElementById('pg-'+name).classList.add('on');document.querySelectorAll('.nb').forEach(b=>{if(b.getAttribute('onclick')?.includes(`'${name}'`))b.classList.add('on');});if(name==='progress'){document.getElementById('progress-list').style.display='block';document.getElementById('progress-detail').style.display='none';renderProgress();}if(name==='swimmers')renderSwimmers();if(name==='events')renderEvents();if(name==='manual')renderManualPage();if(name==='stats')renderStats();}
