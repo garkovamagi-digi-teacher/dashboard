@@ -788,15 +788,15 @@ function renderStats(){
 
 
 async function deleteResult(dbId,swrid,meetId,event,timeMs){
+  const numId=Number(dbId);
   showToast('⏳ Изтрива се...');
   try{
-    // Delete all duplicates with same swrid+meetId+event+timeMs
     let res;
     if(meetId&&event&&timeMs){
       res=await db.from('results').delete()
         .eq('swrid',swrid).eq('meet_id',meetId).eq('event',event).eq('time_ms',Number(timeMs));
     } else {
-      res=await db.from('results').delete().eq('id',Number(dbId));
+      res=await db.from('results').delete().eq('id',numId);
     }
     if(res.error)throw res.error;
     Object.values(athletes).forEach(a=>{
