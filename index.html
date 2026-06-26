@@ -119,6 +119,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
 #loading-overlay{position:fixed;inset:0;background:rgba(14,17,23,.85);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px}
 .spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}.loading-text{font-size:13px;color:var(--text2)}
+#dropzone2:hover,#dropzone2.over{border-color:var(--blue);background:var(--blue-l)}
 .shell{transition:grid-template-columns .25s ease}
 .shell.sb-hidden{grid-template-columns:0 1fr}
 .shell.sb-hidden .sidebar{overflow:hidden;border:none}
@@ -145,6 +146,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
   </div>
   <div class="sb-nav">
     <button class="nb on" onclick="go('progress')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Прогресия</button>
+    <button class="nb" onclick="go('meets')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Състезания</button>
     <button class="nb" onclick="go('swimmers')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Плувци</button>
     <button class="nb" onclick="go('events')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="18 20 18 10"/><polyline points="12 20 12 4"/><polyline points="6 20 6 14"/></svg>По дисциплина</button>
     <button class="nb" onclick="go('stats')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Статистика</button>
@@ -165,6 +167,19 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
 </aside>
 <button class="toggle-btn" onclick="toggleSidebar()" title="Скрий/покажи менюто">☰</button>
 <main class="main">
+  <div id="pg-meets" class="pg">
+    <div class="ph"><div class="ph-left"><h1>Състезания</h1><p id="meets-pg-sub">Всички заредени файлове</p></div></div>
+    <label class="sb-upload" id="dropzone2" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleDrop2(event)" style="display:flex;flex-direction:row;align-items:center;gap:16px;margin-bottom:20px;padding:18px 24px;border-radius:var(--rl);cursor:pointer;background:var(--surf2);border:2px dashed var(--border2);transition:.2s;max-width:500px">
+      <div style="font-size:28px">📁</div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">Добави LXF файл</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">Провлачи тук или кликни за избор · .lxf, .lef, .zip</div>
+      </div>
+      <input type="file" id="file-input2" accept=".lxf,.lef,.zip" multiple onchange="handleFiles(this.files);this.value=''">
+    </label>
+    <div id="meets-pg-content"></div>
+  </div>
+
   <div id="pg-progress" class="pg on">
     <div id="progress-list">
       <div class="ph"><div class="ph-left"><h1>Прогресия на плувците</h1><p id="prog-sub">Зарежда се…</p></div></div>
@@ -318,7 +333,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
         <option value="4x50F">4×50м Свободен стил</option>
         <option value="4x50M">4×50м Съчетана (Гръб·Бруст·Делфин·Кроул)</option>
         <option value="4x200F">4×200м Свободен стил</option>
-        <option value="4x200M">4×200м Съчетана (Гръб·Бруст·Делфин·Кроул)</option>
+
         <option value="4x100FX">4×100м Свободен стил Микс (2М+2Ж)</option>
         <option value="4x50MX">4×50м Съчетана Микс (2М+2Ж)</option>
       </select>
@@ -564,6 +579,39 @@ async function parseLXF(file){
 
 async function handleFiles(files){for(const f of files)await loadFile(f);}
 function handleDrop(e){e.preventDefault();document.getElementById('dropzone').classList.remove('over');handleFiles(e.dataTransfer.files);}
+function handleDrop2(e){e.preventDefault();document.getElementById('dropzone2').classList.remove('over');handleFiles(e.dataTransfer.files);}
+
+function renderMeetsPage(){
+  const el=document.getElementById('meets-pg-content');if(!el)return;
+  const sub=document.getElementById('meets-pg-sub');
+  if(sub)sub.textContent=meets.length+' '+( meets.length===1?'файл':'файла')+' заредени';
+  if(!meets.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-title">Няма заредени файлове</div><div class="empty-sub">Добави LXF файл по-горе</div></div>';return;}
+  const sorted=[...meets].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  el.innerHTML='<div class="sw-grid">'+sorted.map(m=>{
+    const resCount=Object.values(athletes).reduce((s,a)=>s+a.results.filter(r=>r.meetId===m.id).length,0);
+    const relCount=Object.values(athletes).reduce((s,a)=>s+(a.relayResults||[]).filter(r=>r.meetId===m.id).length,0);
+    return`<div class="sw-card" style="cursor:default">
+      <div class="sw-card-head">
+        <div class="av" style="width:40px;height:40px;font-size:18px;background:${m.color}22;color:${m.color}">🏊</div>
+        <div style="flex:1;min-width:0">
+          <div class="sw-card-name">${m.name}</div>
+          <div class="sw-card-meta">${[m.date,m.city,m.course].filter(Boolean).join(' · ')}</div>
+        </div>
+        ${m.is_national?`<span style="font-size:10px;padding:2px 7px;border-radius:12px;background:var(--amber-l);color:var(--amber);font-weight:600;white-space:nowrap">★ Държавно</span>`:''}
+      </div>
+      <div class="sw-card-body">
+        <div style="display:flex;gap:12px;margin-bottom:10px">
+          <div style="text-align:center"><div style="font-size:20px;font-weight:600;font-family:'DM Mono',monospace;color:var(--blue)">${resCount}</div><div style="font-size:10px;color:var(--text3)">резултата</div></div>
+          ${relCount?`<div style="text-align:center"><div style="font-size:20px;font-weight:600;font-family:'DM Mono',monospace;color:var(--purple)">${relCount}</div><div style="font-size:10px;color:var(--text3)">щафети</div></div>`:''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="toggleNational('${m.id}',event)" class="fp${m.is_national?' on':''}" style="font-size:11px;flex:1;min-width:100px">${m.is_national?'✓ Маркирано Държ.':'Маркирай като Държ.'}</button>
+          <button onclick="removeMeet('${m.id}',event)" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--red);background:none;color:var(--red);cursor:pointer;font-family:inherit;flex-shrink:0">🗑 Изтрий</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
 async function loadFile(file){
   try{
     showToast('⏳ Зарежда се: '+file.name);
@@ -576,8 +624,9 @@ async function loadFile(file){
 
 function renderMeetsList(){
   const el=document.getElementById('meets-items');
-  if(!meets.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 4px">Все още няма качени файлове</div>';return;}
+  if(!meets.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 4px">Все още няма качени файлове</div>';renderMeetsPage();return;}
   el.innerHTML=meets.map(m=>`<div class="meet-item"><div class="meet-dot" style="background:${m.color}"></div><div class="meet-info"><div class="meet-name">${m.name}</div><div class="meet-meta">${m.date}${m.city?' · '+m.city:''}${m.course?' · '+m.course:''}</div></div><button class="meet-nat ${m.is_national?'on ':'' }" onclick="toggleNational('${m.id}',event)">${m.is_national?'✓ Държ.':'Държ.'}</button><button class="meet-del" onclick="removeMeet('${m.id}',event)">✕</button></div>`).join('');
+  renderMeetsPage();
 }
 function updateSidebarStats(){
   const allAth=Object.values(athletes).filter(a=>!a.hidden);
@@ -835,7 +884,7 @@ const RELAY_DEFS=[
   {id:'4x50F',label:'4×50м Свободен стил',dist:50,legs:['Свободен','Свободен','Свободен','Свободен'],mixed:false},
   {id:'4x50M',label:'4×50м Съчетана',dist:50,legs:['Гръб','Бруст','Делфин','Свободен'],mixed:false},
   {id:'4x200F',label:'4×200м Свободен стил',dist:200,legs:['Свободен','Свободен','Свободен','Свободен'],mixed:false},
-  {id:'4x200M',label:'4×200м Съчетана',dist:200,legs:['Гръб','Бруст','Делфин','Свободен'],mixed:false},
+
   {id:'4x100FX',label:'4×100м Свободен стил Микс (2М+2Ж)',dist:100,legs:['Свободен','Свободен','Свободен','Свободен'],mixed:true},
   {id:'4x50MX',label:'4×50м Съчетана Микс (2М+2Ж)',dist:50,legs:['Гръб','Бруст','Делфин','Свободен'],mixed:true},
 ];
@@ -959,31 +1008,28 @@ function renderMeetReport(){
     const meetResults=a.results.filter(r=>r.meetId===meetId);
     if(!meetResults.length)return;
     const events=[...new Set(meetResults.map(r=>r.event))];
-    const pbs=meetResults.filter(r=>{
-      const allEv=a.results.filter(x=>x.event===r.event);
-      return r.timeMs<=Math.min(...allEv.map(x=>x.timeMs));
-    });
+    const meetDate=meet.date||'';
     const improved=events.filter(ev=>{
-      const meetR=meetResults.find(r=>r.event===ev);if(!meetR)return false;
-      const prior=a.results.filter(r=>r.event===ev&&r.meetId!==meetId);
+      const evAtMeet=meetResults.filter(r=>r.event===ev&&r.timeMs);
+      if(!evAtMeet.length)return false;
+      const bestAtMeet=Math.min(...evAtMeet.map(r=>r.timeMs));
+      const prior=a.results.filter(r=>r.event===ev&&r.timeMs&&r.date&&r.date<meetDate);
       if(!prior.length)return false;
-      return meetR.timeMs<Math.min(...prior.map(r=>r.timeMs));
+      return bestAtMeet<Math.min(...prior.map(r=>r.timeMs));
     });
-    swStats[a.swrid]={athlete:a,coach:a.coach||'Без треньор',results:meetResults,events,pbs:pbs.length,improved:improved.length,totalResults:meetResults.length};
+    swStats[a.swrid]={athlete:a,coach:a.coach||'Без треньор',results:meetResults,events,improved:improved.length,totalResults:meetResults.length};
   });
   const coaches={};
   Object.values(swStats).forEach(s=>{
-    if(!coaches[s.coach])coaches[s.coach]={coach:s.coach,swimmers:[],totalPbs:0,totalImproved:0,totalResults:0};
+    if(!coaches[s.coach])coaches[s.coach]={coach:s.coach,swimmers:[],totalImproved:0,totalResults:0};
     coaches[s.coach].swimmers.push(s);
-    coaches[s.coach].totalPbs+=s.pbs;
     coaches[s.coach].totalImproved+=s.improved;
     coaches[s.coach].totalResults+=s.totalResults;
   });
   const totalSw=Object.values(swStats).length;
-  const totalPbs=Object.values(swStats).reduce((s,x)=>s+x.pbs,0);
   const totalImp=Object.values(swStats).reduce((s,x)=>s+x.improved,0);
   const totalRes=Object.values(swStats).reduce((s,x)=>s+x.totalResults,0);
-  let out=`<div class="metrics" style="margin-bottom:20px"><div class="mc"><div class="mc-l">Участвали</div><div class="mc-v">${totalSw}</div><div class="mc-s">плувци</div></div><div class="mc"><div class="mc-l">Стартове</div><div class="mc-v">${totalRes}</div></div><div class="mc hi"><div class="mc-l">Лични (ЛВ)</div><div class="mc-v">${totalPbs}</div></div><div class="mc"><div class="mc-l">Подобрения</div><div class="mc-v">${totalImp}</div><div class="mc-s">спрямо предишен</div></div></div>`;
+  let out=`<div class="metrics" style="margin-bottom:20px"><div class="mc"><div class="mc-l">Участвали</div><div class="mc-v">${totalSw}</div><div class="mc-s">плувци</div></div><div class="mc"><div class="mc-l">Стартове</div><div class="mc-v">${totalRes}</div></div><div class="mc hi"><div class="mc-l">Подобрения</div><div class="mc-v">${totalImp}</div><div class="mc-s">спрямо предишен</div></div></div>`;
   const coachList=Object.values(coaches).sort((a,b)=>b.swimmers.length-a.swimmers.length);
   coachList.forEach(c=>{
     const uniqEvs=[...new Set(c.swimmers.flatMap(s=>s.events))].length;
@@ -1016,7 +1062,7 @@ async function deleteResult(dbId,swrid,meetId,timeMs){
   }
 }
 
-function go(name){killCharts();document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));const pg=document.getElementById('pg-'+name);if(pg)pg.classList.add('on');document.querySelectorAll('.nb').forEach(b=>{if(b.getAttribute('onclick')?.includes(`'${name}'`))b.classList.add('on');});if(name==='progress'){document.getElementById('progress-list').style.display='block';document.getElementById('progress-detail').style.display='none';renderProgress();}if(name==='swimmers')renderSwimmers();if(name==='events')renderEvents();if(name==='manual')renderManualPage();if(name==='stats')renderStats();if(name==='meet-report')renderMeetReport();if(name==='relay'){updateRelayGender();}}
+function go(name){killCharts();document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));const pg=document.getElementById('pg-'+name);if(pg)pg.classList.add('on');document.querySelectorAll('.nb').forEach(b=>{if(b.getAttribute('onclick')?.includes(`'${name}'`))b.classList.add('on');});if(name==='progress'){document.getElementById('progress-list').style.display='block';document.getElementById('progress-detail').style.display='none';renderProgress();}if(name==='swimmers')renderSwimmers();if(name==='events')renderEvents();if(name==='manual')renderManualPage();if(name==='stats')renderStats();if(name==='meet-report')renderMeetReport();if(name==='relay'){updateRelayGender();}if(name==='meets')renderMeetsPage();}
 function toggleSidebar(){
   document.querySelector(".shell").classList.toggle("sb-hidden");
 }
