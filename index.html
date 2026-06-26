@@ -148,6 +148,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
     <button class="nb" onclick="go('swimmers')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Плувци</button>
     <button class="nb" onclick="go('events')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="18 20 18 10"/><polyline points="12 20 12 4"/><polyline points="6 20 6 14"/></svg>По дисциплина</button>
     <button class="nb" onclick="go('stats')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Статистика</button>
+    <button class="nb" onclick="go('meet-report')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>По Съст.</button>
     <button class="nb" onclick="go('manual')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Ръчно въвеждане</button>
   </div>
   <div class="scroll-area meets-list" id="meets-list">
@@ -240,6 +241,7 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
             <div><div class="form-label">Пол</div><select id="ath-gender" style="width:100%"><option value="M">Момче</option><option value="F">Момиче</option></select></div>
           </div>
           <div><div class="form-label">SwimRankings ID (незадължително)</div><input type="text" id="ath-swrid" placeholder="напр. 5355151" style="width:100%"></div>
+          <div><div class="form-label">Треньор</div><input type="text" id="ath-coach" placeholder="напр. Иван Петров" style="width:100%"></div>
           <button class="btn-primary" onclick="addManualAthlete()">Добави плувец →</button>
           <div id="ath-error" style="font-size:12px;color:var(--red);min-height:16px"></div>
         </div>
@@ -296,7 +298,22 @@ tr:last-child td{border-bottom:none}tr.clickable:hover td{background:var(--surf2
       <select id="stats-gender" onchange="renderStats()"><option value="">М + Ж</option><option value="M">Момчета</option><option value="F">Момичета</option></select>
       <select id="stats-year-filter" onchange="renderStats()"><option value="">Всички сезони</option></select>
     </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <span style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Възраст:</span>
+      <button class="fp" id="sag-11-12" onclick="toggleStatAge('11-12',this)">11–12 г.</button>
+      <button class="fp" id="sag-13-14" onclick="toggleStatAge('13-14',this)">13–14 г.</button>
+      <button class="fp" id="sag-15-17" onclick="toggleStatAge('15-17',this)">15–17 г.</button>
+      <button class="fp" id="sag-18plus" onclick="toggleStatAge('18+',this)">18+ г.</button>
+    </div>
     <div id="stats-content"><div class="empty-state"><div class="empty-icon">🏅</div><div class="empty-title">Няма маркирани държавни</div><div class="empty-sub">Кликни Държ. до всяко състезание вляво</div></div></div>
+  </div>
+
+  <div id="pg-meet-report" class="pg">
+    <div class="ph"><div class="ph-left"><h1>Отчет по Съст.</h1><p id="mr-sub">Избери Съст. за анализ</p></div></div>
+    <div class="toolbar">
+      <select id="mr-meet-sel" onchange="renderMeetReport()" style="min-width:280px"><option value="">— Избери Съст. —</option></select>
+    </div>
+    <div id="mr-content"><div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">Избери Съст.</div><div class="empty-sub">Избери Съст. от менюто по-горе</div></div></div>
   </div>
 </main>
 </div>
@@ -307,6 +324,7 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const MEET_COLORS=['#4f8ef7','#34d399','#fbbf24','#f87171','#a78bfa','#2dd4bf','#fb923c','#e879f9'];
 let meets=[],athletes={},hiddenSwrids=new Set(),filterMode='all',charts={},manualResultsCache=[];
 let swShowHidden=false;
+let selectedStatAges=new Set();
 const selectedAges={prog:new Set(),sw:new Set()};
 
 function avColor(n){const c=['#4f8ef7','#34d399','#a78bfa','#fbbf24','#f472b6','#2dd4bf','#fb923c','#f87171'];return c[n.charCodeAt(0)%c.length];}
@@ -354,10 +372,7 @@ async function removeMeet(meetId,e){
   showLoading(true);
   await db.from('results').delete().eq('meet_id',meetId);
   await db.from('meets').delete().eq('id',meetId);
-  await function toggleSidebar(){
-  document.querySelector(".shell").classList.toggle("sb-hidden");
-}
-loadData();
+  await loadData();
 }
 
 async function hideSwimmer(swrid,e){e.stopPropagation();await db.from('athletes').update({hidden:true}).eq('swrid',swrid);hiddenSwrids.add(swrid);if(athletes[swrid])athletes[swrid].hidden=true;renderSwimmers();renderProgress();}
@@ -369,17 +384,18 @@ async function addManualAthlete(){
   const year=parseInt(document.getElementById('ath-year').value||'0');
   const gender=document.getElementById('ath-gender').value;
   const swridIn=document.getElementById('ath-swrid').value.trim();
+  const coach=(document.getElementById('ath-coach')?.value||'').trim();
   const errEl=document.getElementById('ath-error');errEl.textContent='';
   if(!fname||!lname){errEl.textContent='Попълни първо и фамилно име';return;}
   if(!year||year<1990||year>2025){errEl.textContent='Невалидна година';return;}
   const swrid=swridIn||'manual_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
   if(athletes[swrid]){errEl.textContent='Плувец с това ID вече съществува';return;}
-  const row={swrid,name:fname+' '+lname,birthdate:year+'-01-01',year,gender,club:'НСК Олимп',hidden:false};
+  const row={swrid,name:fname+' '+lname,birthdate:year+'-01-01',year,gender,club:'НСК Олимп',hidden:false,coach,nationality:'България'};
   const{error}=await db.from('athletes').upsert(row);
   if(error){errEl.textContent='Грешка: '+error.message;return;}
   athletes[swrid]={...row,results:[],relayResults:[]};
   updateSidebarStats();updateAllFilters();renderSwimmers();renderProgress();renderManualPage();
-  document.getElementById('ath-fname').value='';document.getElementById('ath-lname').value='';document.getElementById('ath-year').value='';document.getElementById('ath-swrid').value='';
+  document.getElementById('ath-fname').value='';document.getElementById('ath-lname').value='';document.getElementById('ath-year').value='';document.getElementById('ath-swrid').value='';if(document.getElementById('ath-coach'))document.getElementById('ath-coach').value='';
   showToast('✓ Добавен: '+row.name);
 }
 
@@ -429,10 +445,7 @@ async function deleteManualResult(dbId){
   const{error}=await db.from('results').delete().eq('id',dbId);
   if(error){showToast('⚠ '+error.message,true);return;}
   manualResultsCache=manualResultsCache.filter(r=>r.id!==dbId);
-  await function toggleSidebar(){
-  document.querySelector(".shell").classList.toggle("sb-hidden");
-}
-loadData();
+  await loadData();
 }
 
 // LXF
@@ -530,10 +543,7 @@ async function loadFile(file){
   try{
     showToast('⏳ Зарежда се: '+file.name);
     const{meetInfo,parsedAthletes,added}=await parseLXF(file);
-    showLoading(true);await saveToSupabase(meetInfo,parsedAthletes);await function toggleSidebar(){
-  document.querySelector(".shell").classList.toggle("sb-hidden");
-}
-loadData();
+    showLoading(true);await saveToSupabase(meetInfo,parsedAthletes);await loadData();
     if(added===0)showToast('⚠ Не са намерени плувци с код OL.',true);
     else showToast('✓ '+meetInfo.name+' — '+added+' резултата записани');
   }catch(e){showLoading(false);console.error(e);showToast('⚠ '+e.message,true);}
@@ -561,6 +571,7 @@ function updateAllFilters(){
   const events=[...new Set(allAth.flatMap(a=>a.results.map(r=>r.event)))].sort();
   const yr=document.getElementById('prog-year');if(yr){const c=yr.value;yr.innerHTML='<option value="">Всички годишници</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');yr.value=c;}
   const ev=document.getElementById('prog-event');if(ev){const c=ev.value;ev.innerHTML='<option value="">Всички дисциплини</option>'+events.map(e=>`<option value="${e}">${e}</option>`).join('');ev.value=c;}
+  const mrSel=document.getElementById('mr-meet-sel');if(mrSel){const cur=mrSel.value;mrSel.innerHTML='<option value="">— Избери Съст. —</option>'+[...meets].sort((a,b)=>b.date.localeCompare(a.date)).map(m=>`<option value="${m.id}">${m.name}${m.date?' ('+m.date+')':''}</option>`).join('');if(meets.find(m=>m.id===cur))mrSel.value=cur;}
 }
 function setFilter(mode,btn){filterMode=mode;document.querySelectorAll('.fp').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderProgress();}
 function buildAgePicker(key,ages,fn){
@@ -648,7 +659,7 @@ function renderEvSections(a,wrap,resultsArr,chartPrefix){
     const chartId=`${chartPrefix}_${a.swrid}_${idx}`;const hasMulti=evData.results.length>=2;
     const badgeCls=evData.count===1?'one':evData.improved?'imp':'reg';
     const badgeText=evData.count===1?'1 старт':(evData.last<evData.first)?`▲ -${evData.delta.toFixed(2)}с`:`▼ +${evData.delta.toFixed(2)}с`;
-    const resRows=evData.results.map((r,i)=>{const prev=i>0?evData.results[i-1].timeMs:null;const delta=prev?(prev-r.timeMs)/1000:null;const dStr=delta!==null?(delta>0?`▲ ${delta.toFixed(2)}с`:delta<0?`▼ ${Math.abs(delta).toFixed(2)}с`:'='):'—';const dCls=delta===null?'':delta>0?'pos':'neg';return`<div class="res-row"><div><div class="res-time">${r.time}</div><div class="res-meet">${r.meetName}</div></div><div style="text-align:right;display:flex;align-items:center;gap:8px"><div><div class="res-delta ${dCls}">${dStr}</div><div class="res-pts">${r.points} т. WA · ${r.date}</div></div>${r.dbId?`<button onclick="deleteResult(${r.dbId},'${a.swrid}')" style="font-size:11px;padding:2px 7px;border-radius:4px;border:1px solid var(--border2);background:none;color:var(--red);cursor:pointer;flex-shrink:0" title="Изтрий">✕</button>`:''}</div></div>`;}).join('');
+    const resRows=evData.results.map((r,i)=>{const prev=i>0?evData.results[i-1].timeMs:null;const delta=prev?(prev-r.timeMs)/1000:null;const dStr=delta!==null?(delta>0?`▲ ${delta.toFixed(2)}с`:delta<0?`▼ ${Math.abs(delta).toFixed(2)}с`:'='):'—';const dCls=delta===null?'':delta>0?'pos':'neg';return`<div class="res-row"><div><div class="res-time">${r.time}</div><div class="res-meet">${r.meetName}</div></div><div style="text-align:right;display:flex;align-items:center;gap:8px"><div><div class="res-delta ${dCls}">${dStr}</div><div class="res-pts">${r.points} т. WA · ${r.date}</div></div>${r.dbId?`<button onclick="deleteResult(${r.dbId},'${a.swrid}','${r.meetId}',${r.timeMs})" style="font-size:11px;padding:2px 7px;border-radius:4px;border:1px solid var(--border2);background:none;color:var(--red);cursor:pointer;flex-shrink:0" title="Изтрий">✕</button>`:''}</div></div>`;}).join('');
     const div=document.createElement('div');div.className='ev-section';
     div.innerHTML=`<div class="ev-section-head"><div class="ev-section-name">${evName}</div><span class="ev-prog-badge ${badgeCls}">${badgeText}</span></div><div class="ev-section-body">${hasMulti?`<div class="chart-wrap"><canvas id="${chartId}"></canvas></div>`:''}<div class="results-mini">${resRows}</div></div>`;
     wrap.appendChild(div);
@@ -674,7 +685,7 @@ function renderSwimmerDetail(a){
   const poolBadges=(hasLCM?'<span class="tag tag-blue">50м LCM</span>':'')+
     (hasSCM?'<span class="tag" style="background:var(--amber-l);color:var(--amber)">25м SCM</span>':'');
   document.getElementById('swimmer-detail-content').innerHTML=
-    `<div class="detail-header"><div class="av" style="width:56px;height:56px;font-size:18px;background:${col}22;color:${col}">${initials(a.name)}</div><div style="flex:1"><div class="detail-name">${a.name}</div><div class="detail-meta">${a.club||'НСК Олимп'} · ${a.birthdate||a.year} · ${getAge(a)} год.</div><div class="tags"><span class="tag tag-blue">${a.gender==='M'?'Момче':'Момиче'}</span><span class="tag tag-green">${impCount} подобрения</span><span class="tag tag-gray">${a.results.length} старта</span>${poolBadges}${a.swrid&&!a.swrid.startsWith('manual_')?`<a href="${srLink}" target="_blank" style="text-decoration:none"><span class="tag tag-gray">SwimRankings ↗</span></a>`:''}</div></div></div><div id="detail-body"></div>${a.relayResults&&a.relayResults.length?'<div style="margin-top:20px"><div style="font-size:13px;font-weight:600;margin-bottom:10px">Щафета — Пост 1</div><div id="relay-sections-wrap" class="ev-sections"></div></div>':''}`;
+    `<div class="detail-header"><div class="av" style="width:56px;height:56px;font-size:18px;background:${col}22;color:${col}">${initials(a.name)}</div><div style="flex:1"><div class="detail-name">${a.name}</div><div class="detail-meta">${a.club||'НСК Олимп'} · ${a.birthdate||a.year} · ${getAge(a)} год.</div><div class="tags"><span class="tag tag-blue">${a.gender==='M'?'Момче':'Момиче'}</span><span class="tag tag-green">${impCount} подобрения</span><span class="tag tag-gray">${a.results.length} старта</span>${poolBadges}${a.swrid&&!a.swrid.startsWith('manual_')?`<a href="${srLink}" target="_blank" style="text-decoration:none"><span class="tag tag-gray">SwimRankings ↗</span></a>`:''}</div></div></div><div class="card" style="padding:16px;margin-bottom:16px"><div class="card-title" style="margin-bottom:12px">📋 Профил</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px"><div><div class="form-label">Треньор</div><input type="text" id="prof-coach" value="${a.coach||''}" placeholder="напр. Иван Петров" style="width:100%"></div><div><div class="form-label">Националност</div><input type="text" id="prof-nationality" value="${a.nationality||'България'}" style="width:100%"></div><div><div class="form-label">Ръст (см)</div><input type="number" id="prof-height" value="${a.height||''}" placeholder="175" style="width:100%"></div><div><div class="form-label">Тегло (кг)</div><input type="number" id="prof-weight" value="${a.weight||''}" placeholder="65" style="width:100%"></div><div style="display:flex;align-items:flex-end"><button class="btn-primary" onclick="saveAthleteProfile('${a.swrid}')">Запази</button></div></div></div><div id="detail-body"></div>${a.relayResults&&a.relayResults.length?'<div style="margin-top:20px"><div style="font-size:13px;font-weight:600;margin-bottom:10px">Щафета — Пост 1</div><div id="relay-sections-wrap" class="ev-sections"></div></div>':''}`;
   const body=document.getElementById('detail-body');
   if(hasLCM){
     const sec=document.createElement('div');
@@ -777,32 +788,97 @@ function renderStats(){
     const mx=Math.max(...nr.map(r=>r.points||0));
     ss[a.swrid]={athlete:a,age,tot,mx,cnt:nr.length};
   });
+  const rowTpl=(s,i)=>{const col=avColor(s.athlete.name);const r=i+1;const m=r===1?'🥇':r===2?'🥈':r===3?'🥉':'';return`<tr class="clickable" onclick="go('progress');showSwimmerDetail('${s.athlete.swrid}')"><td style="font-weight:700;color:var(--text3)">${m||r}</td><td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:26px;height:26px;font-size:9px;background:${col}22;color:${col}">${initials(s.athlete.name)}</div><span style="font-weight:500">${s.athlete.name}</span></div></td><td style="color:var(--text3)">${s.athlete.year}</td><td>${s.cnt}</td><td><span class="mono" style="color:var(--blue)">${s.mx}</span></td><td><span class="mono" style="color:var(--green);font-weight:700">${s.tot}</span></td></tr>`;};
+  const thead='<table><thead><tr><th>#</th><th>Плувец</th><th>Г.р.</th><th>Старта</th><th>Макс. т.</th><th>Сбор WA</th></tr></thead><tbody>';
   let out='';
-  groups.forEach(gr=>{
-    const list=Object.values(ss).filter(s=>ag(s.age,gr.k)).sort((a,b)=>b.tot-a.tot);
-    if(!list.length)return;
-    out+=`<div class="stat-group"><div class="stat-group-head"><span>🏅 ${gr.l}</span><span class="stat-limit">до ${gr.lim} място</span></div><table><thead><tr><th>#</th><th>Плувец</th><th>Г.р.</th><th>Старта</th><th>Макс. т.</th><th>Сбор WA</th></tr></thead><tbody>${list.map((s,i)=>{const col=avColor(s.athlete.name);const r=i+1;const m=r===1?'🥇':r===2?'🥈':r===3?'🥉':'';return`<tr class="clickable" onclick="go('progress');showSwimmerDetail('${s.athlete.swrid}')"><td style="font-weight:700;color:var(--text3)">${m||r}</td><td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:26px;height:26px;font-size:9px;background:${col}22;color:${col}">${initials(s.athlete.name)}</div><span style="font-weight:500">${s.athlete.name}</span></div></td><td style="color:var(--text3)">${s.athlete.year}</td><td>${s.cnt}</td><td><span class="mono" style="color:var(--blue)">${s.mx}</span></td><td><span class="mono" style="color:var(--green);font-weight:700">${s.tot}</span></td></tr>`; }).join('')}</tbody></table></div>`;
-  });
+  const activeGroups=selectedStatAges.size>0?groups.filter(gr=>selectedStatAges.has(gr.k)):null;
+  if(!activeGroups){
+    const allList=Object.values(ss).sort((a,b)=>b.tot-a.tot);
+    if(allList.length)out+=`<div class="stat-group"><div class="stat-group-head"><span>🏅 Всички плувци</span><span style="font-size:11px;color:var(--text3)">${allList.length} плувци</span></div>${thead}${allList.map(rowTpl).join('')}</tbody></table></div>`;
+  }else{
+    activeGroups.forEach(gr=>{
+      const list=Object.values(ss).filter(s=>ag(s.age,gr.k)).sort((a,b)=>b.tot-a.tot);
+      if(!list.length)return;
+      out+=`<div class="stat-group"><div class="stat-group-head"><span>🏅 ${gr.l}</span><span class="stat-limit">до ${gr.lim} място</span></div>${thead}${list.map(rowTpl).join('')}</tbody></table></div>`;
+    });
+  }
   el.innerHTML=out||'<p style="color:var(--text3);padding:20px">Няма резултати</p>';
 }
 
 
-async function deleteResult(dbId,swrid,meetId,event,timeMs){
-  const numId=Number(dbId);
-  if(!numId){showToast('⚠ Невалиден ID',true);return;}
+function toggleStatAge(k,btn){
+  if(selectedStatAges.has(k)){selectedStatAges.delete(k);btn.classList.remove('on');}
+  else{selectedStatAges.add(k);btn.classList.add('on');}
+  renderStats();
+}
+
+async function saveAthleteProfile(swrid){
+  const coach=(document.getElementById('prof-coach')?.value||'').trim();
+  const nationality=(document.getElementById('prof-nationality')?.value||'България').trim();
+  const height=parseFloat(document.getElementById('prof-height')?.value)||null;
+  const weight=parseFloat(document.getElementById('prof-weight')?.value)||null;
+  const{error}=await db.from('athletes').update({coach,nationality,height,weight}).eq('swrid',swrid);
+  if(error){showToast('⚠ '+error.message,true);return;}
+  if(athletes[swrid]){athletes[swrid].coach=coach;athletes[swrid].nationality=nationality;athletes[swrid].height=height;athletes[swrid].weight=weight;}
+  showToast('✓ Профилът е запазен');
+}
+
+function renderMeetReport(){
+  const meetId=document.getElementById('mr-meet-sel')?.value;
+  const el=document.getElementById('mr-content');
+  if(!meetId){el.innerHTML='<div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">Избери Съст.</div></div>';return;}
+  const meet=meets.find(m=>m.id===meetId);if(!meet)return;
+  document.getElementById('mr-sub').textContent=meet.name+(meet.date?' · '+meet.date:'');
+  const swStats={};
+  Object.values(athletes).filter(a=>!hiddenSwrids.has(a.swrid)).forEach(a=>{
+    const meetResults=a.results.filter(r=>r.meetId===meetId);
+    if(!meetResults.length)return;
+    const events=[...new Set(meetResults.map(r=>r.event))];
+    const pbs=meetResults.filter(r=>{
+      const allEv=a.results.filter(x=>x.event===r.event);
+      return r.timeMs<=Math.min(...allEv.map(x=>x.timeMs));
+    });
+    const improved=events.filter(ev=>{
+      const meetR=meetResults.find(r=>r.event===ev);if(!meetR)return false;
+      const prior=a.results.filter(r=>r.event===ev&&r.meetId!==meetId);
+      if(!prior.length)return false;
+      return meetR.timeMs<Math.min(...prior.map(r=>r.timeMs));
+    });
+    swStats[a.swrid]={athlete:a,coach:a.coach||'Без треньор',results:meetResults,events,pbs:pbs.length,improved:improved.length,totalResults:meetResults.length};
+  });
+  const coaches={};
+  Object.values(swStats).forEach(s=>{
+    if(!coaches[s.coach])coaches[s.coach]={coach:s.coach,swimmers:[],totalPbs:0,totalImproved:0,totalResults:0};
+    coaches[s.coach].swimmers.push(s);
+    coaches[s.coach].totalPbs+=s.pbs;
+    coaches[s.coach].totalImproved+=s.improved;
+    coaches[s.coach].totalResults+=s.totalResults;
+  });
+  const totalSw=Object.values(swStats).length;
+  const totalPbs=Object.values(swStats).reduce((s,x)=>s+x.pbs,0);
+  const totalImp=Object.values(swStats).reduce((s,x)=>s+x.improved,0);
+  const totalRes=Object.values(swStats).reduce((s,x)=>s+x.totalResults,0);
+  let out=`<div class="metrics" style="margin-bottom:20px"><div class="mc"><div class="mc-l">Участвали</div><div class="mc-v">${totalSw}</div><div class="mc-s">плувци</div></div><div class="mc"><div class="mc-l">Стартове</div><div class="mc-v">${totalRes}</div></div><div class="mc hi"><div class="mc-l">Лични (ЛВ)</div><div class="mc-v">${totalPbs}</div></div><div class="mc"><div class="mc-l">Подобрения</div><div class="mc-v">${totalImp}</div><div class="mc-s">спрямо предишен</div></div></div>`;
+  const coachList=Object.values(coaches).sort((a,b)=>b.swimmers.length-a.swimmers.length);
+  coachList.forEach(c=>{
+    const uniqEvs=[...new Set(c.swimmers.flatMap(s=>s.events))].length;
+    out+=`<div class="stat-group"><div class="stat-group-head"><span>👤 ${c.coach}</span><span style="display:flex;gap:8px;align-items:center"><span style="font-size:11px;color:var(--text3)">${c.swimmers.length} плувци · ${uniqEvs} дисц. · ${c.totalResults} старта</span><span class="stat-limit">${c.totalPbs} ЛВ · ${c.totalImproved} подобр.</span></span></div><table><thead><tr><th>Плувец</th><th>Г.р.</th><th>Дисц.</th><th>Старта</th><th>ЛВ</th><th>Подобрения</th></tr></thead><tbody>${c.swimmers.sort((a,b)=>b.pbs-a.pbs||b.improved-a.improved).map(s=>{const col=avColor(s.athlete.name);return`<tr class="clickable" onclick="go('progress');showSwimmerDetail('${s.athlete.swrid}')"><td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:26px;height:26px;font-size:9px;background:${col}22;color:${col}">${initials(s.athlete.name)}</div><span style="font-weight:500">${s.athlete.name}</span></div></td><td style="color:var(--text3)">${s.athlete.year}</td><td>${s.events.length}</td><td>${s.totalResults}</td><td>${s.pbs>0?`<span style="color:var(--green);font-weight:700">${s.pbs} ЛВ</span>`:'—'}</td><td>${s.improved>0?`<span style="color:var(--green);font-weight:600">${s.improved} ▲</span>`:`<span style="color:var(--text3)">—</span>`}</td></tr>`;}).join('')}</tbody></table></div>`;
+  });
+  el.innerHTML=out||'<p style="color:var(--text3);padding:20px">Няма данни за това съст.</p>';
+}
+
+async function deleteResult(dbId,swrid,meetId,timeMs){
+  if(!swrid||!meetId||!timeMs){showToast('⚠ Невалидни параметри',true);return;}
   showToast('⏳ Изтрива се...');
   try{
-    // Delete only by ID to avoid accidental mass deletion
-    const res=await db.from('results').delete().eq('id',numId);
+    // Delete ALL duplicates with same swrid+meet_id+time_ms
+    const res=await db.from('results').delete()
+      .eq('swrid',swrid)
+      .eq('meet_id',meetId)
+      .eq('time_ms',Math.round(Number(timeMs)));
     if(res.error)throw res.error;
-    Object.values(athletes).forEach(a=>{
-      a.results=a.results.filter(r=>Number(r.dbId)!==numId);
-      if(a.relayResults)a.relayResults=a.relayResults.filter(r=>Number(r.dbId)!==numId);
-    });
-    updateSidebarStats();
-    killCharts();
     showToast('✓ Изтрит');
-    // Reload from DB and re-show swimmer
+    killCharts();
     await loadData();
     if(swrid&&athletes[swrid]){
       document.getElementById('progress-list').style.display='none';
@@ -815,7 +891,7 @@ async function deleteResult(dbId,swrid,meetId,event,timeMs){
   }
 }
 
-function go(name){killCharts();document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));document.getElementById('pg-'+name).classList.add('on');document.querySelectorAll('.nb').forEach(b=>{if(b.getAttribute('onclick')?.includes(`'${name}'`))b.classList.add('on');});if(name==='progress'){document.getElementById('progress-list').style.display='block';document.getElementById('progress-detail').style.display='none';renderProgress();}if(name==='swimmers')renderSwimmers();if(name==='events')renderEvents();if(name==='manual')renderManualPage();if(name==='stats')renderStats();}
+function go(name){killCharts();document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));const pg=document.getElementById('pg-'+name);if(pg)pg.classList.add('on');document.querySelectorAll('.nb').forEach(b=>{if(b.getAttribute('onclick')?.includes(`'${name}'`))b.classList.add('on');});if(name==='progress'){document.getElementById('progress-list').style.display='block';document.getElementById('progress-detail').style.display='none';renderProgress();}if(name==='swimmers')renderSwimmers();if(name==='events')renderEvents();if(name==='manual')renderManualPage();if(name==='stats')renderStats();if(name==='meet-report')renderMeetReport();}
 function toggleSidebar(){
   document.querySelector(".shell").classList.toggle("sb-hidden");
 }
